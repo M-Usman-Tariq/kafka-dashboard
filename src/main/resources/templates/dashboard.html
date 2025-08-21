@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Kafka Dashboard</title>
+  <link rel="stylesheet" th:href="@{/css/bootstrap.min.css}" />
+</head>
+<body class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Kafka Dashboard</h3>
+    <div>
+      <a class="btn btn-sm btn-outline-secondary" href="/admin">Admin</a>
+      <a class="btn btn-sm btn-outline-danger" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div id="info" class="mb-4">
+    <div><b>Topic:</b> <span id="topicName">-</span></div>
+    <div><b>Message Count:</b> <span id="messageCount">-</span></div>
+    <div><b>Last Offset:</b> <span id="lastOffset">-</span></div>
+    <div><b>Last Published:</b> <span id="lastPublishedAt">-</span></div>
+    <div><b>Refreshed At:</b> <span id="refreshTime">-</span></div>
+  </div>
+
+  <h5>Consumer Groups</h5>
+  <table class="table table-sm">
+    <thead><tr>
+      <th>Group</th><th>Status</th><th>Total Lag</th><th>Last Committed Offset</th><th>Last Commit Time</th>
+    </tr></thead>
+    <tbody id="groupsBody"></tbody>
+  </table>
+
+  <script>
+    const topic = '[[${@environment.getProperty("app.topic-name")}]]';
+
+    async function load() {
+      const res = await fetch(`/api/topics/${topic}/stats`);
+      const data = await res.json();
+      document.getElementById('topicName').textContent = data.topic || topic;
+      document.getElementById('messageCount').textContent = data.messageCount ?? '-';
+      document.getElementById('lastOffset').textContent = data.lastOffset ?? '-';
+      document.getElementById('lastPublishedAt').textContent = data.lastPublishedAt ? new Date(data.lastPublishedAt).toLocaleString() : 'N/A';
+      document.getElementById('refreshTime').textContent = data.refreshTime ? new Date(data.refreshTime).toLocaleString() : 'N/A';
+
+      const tbody = document.getElementById('groupsBody');
+      tbody.innerHTML = '';
+      (data.consumers || []).forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${c.groupId}</td>
+                        <td>${c.status}</td>
+                        <td>${c.lag ?? '-'}</td>
+                        <td>${c.lastCommittedOffset ?? '-'}</td>
+                        <td>${c.lastCommitTime ? new Date(c.lastCommitTime).toLocaleString() : 'N/A'}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    load();
+    setInterval(load, 10000);
+  </script>
+</body>
+</html>

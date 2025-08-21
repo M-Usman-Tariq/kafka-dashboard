@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/kafka_dashboard
+    username: root
+    password: 4Islamabad!
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  thymeleaf:
+    cache: false
+
+kafka:
+  bootstrap-servers: 172.25.240.68:9092
+
+app:
+  topic-name: test-topic
+  refresh-ms: 300000 # 5 minutes
+
+logging:
+  level:
+    org:
+      springframework: INFO

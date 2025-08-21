@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin</title>
+  <link rel="stylesheet" th:href="@{/css/bootstrap.min.css}" />
+</head>
+<body class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Admin</h3>
+    <div>
+      <a class="btn btn-sm btn-outline-secondary" href="/dashboard">Dashboard</a>
+      <a class="btn btn-sm btn-outline-danger" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6">
+      <h5>Clients</h5>
+      <button class="btn btn-primary btn-sm mb-2" onclick="createClient()">Add Client</button>
+      <table class="table table-sm" id="clientsTbl"><thead><tr>
+        <th>ID</th><th>Client ID</th><th>Name</th><th>Display</th><th>Group</th><th></th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="col-md-6">
+      <h5>Users</h5>
+      <button class="btn btn-primary btn-sm mb-2" onclick="createUser()">Add User</button>
+      <table class="table table-sm" id="usersTbl"><thead><tr>
+        <th>ID</th><th>Username</th><th>Role</th><th></th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <script>
+    async function loadClients() {
+      const res = await fetch('/api/admin/clients');
+      const data = await res.json();
+      const tbody = document.querySelector('#clientsTbl tbody');
+      tbody.innerHTML = '';
+      data.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${c.id}</td><td>${c.clientId}</td><td>${c.name}</td><td>${c.displayName}</td><td>${c.consumerGroupName}</td>
+                        <td><button class='btn btn-sm btn-outline-secondary' onclick='editClient(${c.id})'>Edit</button>
+                            <button class='btn btn-sm btn-outline-danger' onclick='delClient(${c.id})'>Del</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    async function loadUsers() {
+      const res = await fetch('/api/admin/users');
+      const data = await res.json();
+      const tbody = document.querySelector('#usersTbl tbody');
+      tbody.innerHTML = '';
+      data.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${u.id}</td><td>${u.username}</td><td>${u.role}</td>
+                        <td><button class='btn btn-sm btn-outline-secondary' onclick='editUser(${u.id})'>Edit</button>
+                            <button class='btn btn-sm btn-outline-danger' onclick='delUser(${u.id})'>Del</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    async function createClient() {
+      const clientId = prompt('clientId?'); if (!clientId) return;
+      const name = prompt('name?'); if (!name) return;
+      const displayName = prompt('displayName?'); if (!displayName) return;
+      const group = prompt('consumerGroupName?'); if (!group) return;
+      await fetch('/api/admin/clients', {method: 'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({clientId, name, displayName, consumerGroupName: group})});
+      loadClients();
+    }
+    async function editClient(id) {
+      const clientId = prompt('clientId?'); if (!clientId) return;
+      const name = prompt('name?'); if (!name) return;
+      const displayName = prompt('displayName?'); if (!displayName) return;
+      const group = prompt('consumerGroupName?'); if (!group) return;
+      await fetch('/api/admin/clients/'+id, {method: 'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id, clientId, name, displayName, consumerGroupName: group})});
+      loadClients();
+    }
+    async function delClient(id) {
+      if (!confirm('Delete client '+id+'?')) return;
+      await fetch('/api/admin/clients/'+id, {method:'DELETE'});
+      loadClients();
+    }
+
+    async function createUser() {
+      const username = prompt('username?'); if (!username) return;
+      const password = prompt('password?'); if (!password) return;
+      const role = prompt('role? (ROLE_USER/ROLE_ADMIN)', 'ROLE_USER'); if (!role) return;
+      await fetch('/api/admin/users', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({username, password, role})});
+      loadUsers();
+    }
+    async function editUser(id) {
+      const username = prompt('username?'); if (!username) return;
+      const password = prompt('password? (leave empty to keep)') || '';
+      const role = prompt('role? (ROLE_USER/ROLE_ADMIN)', 'ROLE_USER'); if (!role) return;
+      await fetch('/api/admin/users/'+id, {method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({id, username, password, role})});
+      loadUsers();
+    }
+    async function delUser(id) {
+      if (!confirm('Delete appUser '+id+'?')) return;
+      await fetch('/api/admin/users/'+id, {method:'DELETE'});
+      loadUsers();
+    }
+
+    loadClients(); loadUsers();
+  </script>
+</body>
+</html>
