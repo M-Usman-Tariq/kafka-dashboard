@@ -3,59 +3,118 @@
 <head>
   <meta charset="UTF-8">
   <title>Kafka Dashboard</title>
-  <link rel="stylesheet" th:href="@{/css/bootstrap.min.css}" />
+  <link rel="stylesheet" href="/webjars/bootstrap/5.3.7/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/app-theme.css">
 </head>
-<body class="container py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>Kafka Dashboard</h3>
-    <div>
-      <a class="btn btn-sm btn-outline-secondary" href="/admin">Admin</a>
-      <a class="btn btn-sm btn-outline-danger" href="/logout">Logout</a>
+<body>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg bg-body-tertiary px-3">
+  <a class="navbar-brand" href="#">Kafka Dashboard</a>
+  <div class="ms-auto">
+    <a class="btn btn-sm btn-outline-secondary me-2" href="/admin">Admin</a>
+    <a class="btn btn-sm btn-outline-danger" href="/logout">Logout</a>
+  </div>
+</nav>
+
+<div class="container-fluid mt-4">
+  <div class="row">
+    <!-- Stats Cards -->
+    <div class="col-md-3">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="text-muted">Topic</h6>
+          <h5 id="topicName">-</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="text-muted">Message Count</h6>
+          <h5 id="messageCount">-</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="text-muted">Last Offset</h6>
+          <h5 id="lastOffset">-</h5>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <h6 class="text-muted">Last Published</h6>
+          <h6 id="lastPublishedAt">-</h6>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div id="info" class="mb-4">
-    <div><b>Topic:</b> <span id="topicName">-</span></div>
-    <div><b>Message Count:</b> <span id="messageCount">-</span></div>
-    <div><b>Last Offset:</b> <span id="lastOffset">-</span></div>
-    <div><b>Last Published:</b> <span id="lastPublishedAt">-</span></div>
-    <div><b>Refreshed At:</b> <span id="refreshTime">-</span></div>
+  <!-- Refresh Info -->
+  <div class="alert alert-secondary d-flex justify-content-between align-items-center mt-3">
+    <span><b>Refreshed At:</b> <span id="refreshTime">-</span></span>
+    <button class="btn btn-sm btn-outline-primary" onclick="load()">Refresh</button>
   </div>
 
-  <h5>Consumer Groups</h5>
-  <table class="table table-sm">
-    <thead><tr>
-      <th>Group</th><th>Status</th><th>Total Lag</th><th>Last Committed Offset</th><th>Last Commit Time</th>
-    </tr></thead>
-    <tbody id="groupsBody"></tbody>
-  </table>
+  <!-- Consumer Groups Table -->
+  <div class="card shadow-sm mt-4">
+    <div class="card-header">
+      <h5 class="mb-0">Consumer Groups</h5>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover table-striped mb-0">
+        <thead class="table-primary">
+        <tr>
+          <th>Group</th>
+          <th>Status</th>
+          <th>Total Lag</th>
+          <th>Last Committed Offset</th>
+          <th>Last Commit Time</th>
+        </tr>
+        </thead>
+        <tbody id="groupsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
-  <script>
-    const topic = '[[${@environment.getProperty("app.topic-name")}]]';
+<script>
+  const topic = '[[${@environment.getProperty("app.topic-name")}]]';
 
-    async function load() {
-      const res = await fetch(`/api/topics/${topic}/stats`);
-      const data = await res.json();
-      document.getElementById('topicName').textContent = data.topic || topic;
-      document.getElementById('messageCount').textContent = data.messageCount ?? '-';
-      document.getElementById('lastOffset').textContent = data.lastOffset ?? '-';
-      document.getElementById('lastPublishedAt').textContent = data.lastPublishedAt ? new Date(data.lastPublishedAt).toLocaleString() : 'N/A';
-      document.getElementById('refreshTime').textContent = data.refreshTime ? new Date(data.refreshTime).toLocaleString() : 'N/A';
+  async function load() {
+    const res = await fetch(`/api/topics/${topic}/stats`);
+    const data = await res.json();
 
-      const tbody = document.getElementById('groupsBody');
-      tbody.innerHTML = '';
-      (data.consumers || []).forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${c.groupId}</td>
-                        <td>${c.status}</td>
-                        <td>${c.lag ?? '-'}</td>
-                        <td>${c.lastCommittedOffset ?? '-'}</td>
-                        <td>${c.lastCommitTime ? new Date(c.lastCommitTime).toLocaleString() : 'N/A'}</td>`;
-        tbody.appendChild(tr);
-      });
-    }
-    load();
-    setInterval(load, 10000);
-  </script>
+    document.getElementById('topicName').textContent = data.topic || topic;
+    document.getElementById('messageCount').textContent = data.messageCount ?? '-';
+    document.getElementById('lastOffset').textContent = data.lastOffset ?? '-';
+    document.getElementById('lastPublishedAt').textContent = data.lastPublishedAt
+            ? new Date(data.lastPublishedAt).toLocaleString()
+            : 'N/A';
+    document.getElementById('refreshTime').textContent = data.refreshTime
+            ? new Date(data.refreshTime).toLocaleString()
+            : 'N/A';
+
+    const tbody = document.getElementById('groupsBody');
+    tbody.innerHTML = '';
+    (data.consumers || []).forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+          <td>${c.groupId}</td>
+          <td><span class="badge ${c.status === 'ACTIVE' ? 'bg-success' : 'bg-warning'}">${c.status}</span></td>
+          <td>${c.lag ?? '-'}</td>
+          <td>${c.lastCommittedOffset ?? '-'}</td>
+          <td>${c.lastCommitTime ? new Date(c.lastCommitTime).toLocaleString() : 'N/A'}</td>
+        `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  load();
+  setInterval(load, 10000);
+</script>
 </body>
 </html>

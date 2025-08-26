@@ -51,7 +51,7 @@ public class KafkaMetricsService {
         this.topicName = topicName;
     }
 
-    @Scheduled(fixedDelayString = "${app.refresh-ms:300000}")
+    //@Scheduled(fixedDelayString = "${app.refresh-ms:300000}")
     @Transactional
     public void refreshAll() {
         Instant now = Instant.now();
@@ -70,8 +70,12 @@ public class KafkaMetricsService {
                 totalMsgs += Math.max(hi - lo, 0);
                 lastOffset = Math.max(lastOffset, hi);
             }
-            Instant lastPublished = probeLastPublishedTimestamp(partitions, latest);
 
+            Instant lastPublished = null;
+
+            if(totalMsgs > 0) {
+                lastPublished = probeLastPublishedTimestamp(partitions, latest);
+            }
             TopicStats ts = new TopicStats();
             ts.setTopicName(topicName);
             ts.setMessageCount(totalMsgs);
@@ -135,7 +139,7 @@ public class KafkaMetricsService {
                 if (hi <= 0) continue;
                 consumer.assign(Collections.singleton(tp));
                 consumer.seek(tp, hi - 1);
-                var recs = consumer.poll(Duration.ofMillis(200));
+                var recs = consumer.poll(Duration.ofMillis(2000));
                 if (!recs.isEmpty()) {
                     var ts = Instant.ofEpochMilli(recs.iterator().next().timestamp());
                     if (maxTs == null || ts.isAfter(maxTs)) maxTs = ts;

@@ -18,7 +18,7 @@ public class TopicStatsController {
     }
 
     @GetMapping("/{topic}/stats")
-    public TopicView stats(@PathVariable String topic) {
+    public TopicView stats(@PathVariable("topic") String topic) {
         return topicStatsService.stats(topic);
     }
 }

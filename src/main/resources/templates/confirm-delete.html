@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Confirm Delete</title>
+  <link rel="stylesheet" href="/webjars/bootstrap/5.3.7/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/app-theme.css">
+</head>
+<body class="auth-bg">
+<div class="center-card">
+  <h4 class="brand-title mb-3">Confirm Delete</h4>
+  <p class="mb-2" th:text="${message}">Are you sure?</p>
+  <form th:action="${action}" method="post">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+    <div class="d-flex gap-2">
+      <button class="btn btn-danger">Delete</button>
+      <a class="btn btn-outline-secondary" th:href="@{/admin}">Cancel</a>
+    </div>
+  </form>
+</div>
+<script src="/webjars/bootstrap/5.3.7/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

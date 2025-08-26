@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title th:text="${isEdit} ? 'Edit Client' : 'Add Client'">Client</title>
+  <link rel="stylesheet" href="/webjars/bootstrap/5.3.7/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/css/app-theme.css">
+</head>
+<body class="auth-bg">
+<div class="center-card">
+  <h4 class="brand-title mb-3" th:text="${isEdit} ? 'Edit Client' : 'Add Client'"></h4>
+
+  <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+  <form id="clientForm"
+        th:action="@{${isEdit} ? '/admin/clients/' + ${client.id} : '/admin/clients'}"
+        th:object="${client}" method="post" autocomplete="off">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+    <div class="mb-3">
+      <label class="form-label">Client ID</label>
+      <input id="clientId" class="form-control" th:field="*{clientId}"
+             th:readonly="${isEdit}" th:attr="aria-readonly=${isEdit}" required autocomplete="off"/>
+      <div id="clientIdError" class="text-danger"></div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Name</label>
+      <input id="name" class="form-control" th:field="*{name}" required autocomplete="off">
+      <div id="nameError" class="text-danger"></div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Display Name</label>
+      <input id="displayName" class="form-control" th:field="*{displayName}" required autocomplete="off">
+      <div id="displayNameError" class="text-danger"></div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Consumer Group Name</label>
+      <input id="consumerGroupName" class="form-control" th:field="*{consumerGroupName}" required autocomplete="off">
+      <div id="consumerGroupNameError" class="text-danger"></div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button id="saveBtn" type="submit" class="btn btn-primary" disabled>Save</button>
+      <a class="btn btn-outline-secondary" th:href="@{/admin}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<!-- Save Confirmation Modal -->
+<div class="modal fade" id="saveConfirmModal" tabindex="-1" aria-labelledby="saveConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-3 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title" id="saveConfirmModalLabel">Confirm Save</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to save this client?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="confirmSaveBtn" class="btn btn-primary">Yes, Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function validateClient() {
+    let valid = true;
+
+    const clientId = document.getElementById('clientId');
+    const name = document.getElementById('name');
+    const displayName = document.getElementById('displayName');
+    const consumerGroupName = document.getElementById('consumerGroupName');
+
+    // Clear errors
+    document.getElementById('clientIdError').innerText = '';
+    document.getElementById('nameError').innerText = '';
+    document.getElementById('displayNameError').innerText = '';
+    document.getElementById('consumerGroupNameError').innerText = '';
+
+    if (!clientId.value.trim()) {
+      document.getElementById('clientIdError').innerText = 'Client ID is required';
+      valid = false;
+    }
+
+    if (!name.value.trim()) {
+      document.getElementById('nameError').innerText = 'Name is required';
+      valid = false;
+    }
+
+    if (!displayName.value.trim()) {
+      document.getElementById('displayNameError').innerText = 'Display Name is required';
+      valid = false;
+    }
+
+    if (!consumerGroupName.value.trim()) {
+      document.getElementById('consumerGroupNameError').innerText = 'Consumer Group Name is required';
+      valid = false;
+    }
+
+    // Enable/disable save button
+    document.getElementById('saveBtn').disabled = !valid;
+
+    return valid;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('clientForm');
+    const saveBtn = document.getElementById('saveBtn');
+    const confirmSaveBtn = document.getElementById('confirmSaveBtn');
+
+    const inputs = ['clientId', 'name', 'displayName', 'consumerGroupName'];
+    inputs.forEach(id => {
+      document.getElementById(id).addEventListener('input', validateClient);
+    });
+
+    validateClient(); // initial validation
+
+    // Intercept form submit
+    form.addEventListener('submit', function (e) {
+      if (!validateClient()) {
+        e.preventDefault();
+        return false;
+      }
+      e.preventDefault(); // stop immediate submit
+      const modal = new bootstrap.Modal(document.getElementById('saveConfirmModal'));
+      modal.show();
+
+      confirmSaveBtn.onclick = function () {
+        modal.hide();
+        form.submit();
+      };
+    });
+  });
+</script>
+
+<script src="/webjars/bootstrap/5.3.7/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -12,11 +12,11 @@ public class PageController {
         return "dashboard";
     }
 
-    @GetMapping("/admin")
-    @PreAuthorize("hasRole('ADMIN')")
-    public String admin() {
-        return "admin";
-    }
+//    @GetMapping("/admin")
+//    @PreAuthorize("hasRole('ADMIN')")
+//    public String admin() {
+//        return "admin";
+//    }
 
     @GetMapping("/login")
     public String login() {

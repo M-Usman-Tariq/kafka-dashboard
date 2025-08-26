@@ -2,6 +2,7 @@ package com.projects.kafkadash.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
@@ -19,13 +20,14 @@ public class AppUser implements UserDetails {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
     @NotBlank
+    @Column(unique = true, nullable = false)
     private String username;
 
     @Column(nullable = false)
     private String password; // BCrypt
 
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;

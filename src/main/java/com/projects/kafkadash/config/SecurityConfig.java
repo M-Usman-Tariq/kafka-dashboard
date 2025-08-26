@@ -21,13 +21,17 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/login","/css/**","/js/**").permitAll()
+                .requestMatchers("/login","/css/**","/js/**", "/img/**", "/webjars/**").permitAll()
                 .requestMatchers("/", "/dashboard").hasAnyRole("USER","ADMIN")
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").hasAnyRole("USER","ADMIN")
                 .anyRequest().authenticated()
             )
-            .formLogin(login -> login.loginPage("/login").permitAll())
+            .formLogin(form -> form
+                    .loginPage("/login")
+                    .defaultSuccessUrl("/dashboard", true)   // 👈 always redirect here
+                    .permitAll()
+            )
             .logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl("/login?logout").permitAll());
         return http.build();
     }

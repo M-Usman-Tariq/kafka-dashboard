@@ -17,12 +17,15 @@ public class Client {
     @NotBlank
     private String clientId;
 
+    @NotBlank
     @Column(nullable = false)
     private String name;
 
+    @NotBlank
     @Column(nullable = false)
     private String displayName;
 
+    @NotBlank
     @Column(nullable = false)
     private String consumerGroupName;
 }
