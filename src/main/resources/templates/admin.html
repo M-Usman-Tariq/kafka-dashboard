@@ -25,7 +25,10 @@
     <a class="navbar-brand" href="#">Admin</a>
     <div class="ms-auto">
         <a class="btn btn-sm btn-outline-secondary me-2" href="/dashboard">Dashboard</a>
-        <a class="btn btn-sm btn-outline-danger" href="/logout">Logout</a>
+        <form th:action="@{/logout}" method="post" style="display:inline">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+            <button type="submit" class="btn btn-sm btn-outline-danger">Logout</button>
+        </form>
     </div>
 </nav>
 
@@ -91,25 +94,27 @@
                     </table>
                 </div>
             </div>
-
             <!-- Users pagination -->
             <nav th:if="${usersPage.totalPages > 1}" class="mb-4">
-                <ul class="pagination pagination-sm">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
                     <li class="page-item" th:classappend="${usersPage.first} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/admin(upage=${usersPage.number - 1}, cpage=${clientsPage.number})}">Prev</a>
                     </li>
+
                     <li class="page-item" th:each="i : ${#numbers.sequence(0, usersPage.totalPages - 1)}"
                         th:classappend="${i == usersPage.number} ? 'active'">
                         <a class="page-link" th:text="${i + 1}"
                            th:href="@{/admin(upage=${i}, cpage=${clientsPage.number})}"></a>
                     </li>
+
                     <li class="page-item" th:classappend="${usersPage.last} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/admin(upage=${usersPage.number + 1}, cpage=${clientsPage.number})}">Next</a>
                     </li>
                 </ul>
             </nav>
+
         </div>
     </div>
 
@@ -166,8 +171,8 @@
             </div>
 
             <!-- Clients pagination -->
-            <nav th:if="${clientsPage.totalPages > 1}">
-                <ul class="pagination pagination-sm">
+            <nav th:if="${clientsPage.totalPages > 1}" class="mb-4">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
                     <li class="page-item" th:classappend="${clientsPage.first} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/admin(upage=${usersPage.number}, cpage=${clientsPage.number - 1})}">Prev</a>
@@ -183,7 +188,6 @@
                     </li>
                 </ul>
             </nav>
-
         </div>
     </div>
 </div>
