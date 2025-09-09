@@ -22,7 +22,9 @@ public class ConsumerGroupStats {
 
     @Column(name = "total_lag")
     private Long lag;
+    @Column(name = "lastCommittedOffset")
     private Long lastCommittedOffset;
+    @Column(name = "lastCommitTime")
     private Instant lastCommitTime;
     @Column(nullable = false)
     private String status; // ACTIVE or INACTIVE

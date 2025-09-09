@@ -1,24 +1,29 @@
 package com.projects.kafkadash.service;
 
+import com.projects.kafkadash.dto.CommitInfo;
+import com.projects.kafkadash.dto.GroupTopicPartition;
+import com.projects.kafkadash.util.OffsetKey;
 import com.projects.kafkadash.entity.Client;
 import com.projects.kafkadash.entity.ConsumerGroupStats;
 import com.projects.kafkadash.entity.TopicStats;
-import com.projects.kafkadash.exception.GlobalExceptionHandler;
 import com.projects.kafkadash.repository.ClientRepository;
 import com.projects.kafkadash.repository.ConsumerGroupStatsRepository;
 import com.projects.kafkadash.repository.TopicStatsRepository;
+import com.projects.kafkadash.util.OffsetMessageParser;
 import org.apache.kafka.clients.admin.*;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.*;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.scheduling.annotation.Scheduled;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -34,8 +39,7 @@ public class KafkaMetricsService {
     private final ConsumerGroupStatsRepository cgRepo;
     private final String bootstrapServers;
     private final String topicName;
-    Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-
+    private static final Logger logger = LoggerFactory.getLogger(KafkaMetricsService.class);
 
     public KafkaMetricsService(AdminClient admin,
                                ClientRepository clients,
@@ -51,13 +55,16 @@ public class KafkaMetricsService {
         this.topicName = topicName;
     }
 
-    //@Scheduled(fixedDelayString = "${app.refresh-ms:300000}")
+    /**
+     * Runs every X ms — adjust via app.refresh-ms
+     */
+    @Scheduled(fixedDelayString = "${app.refresh-ms:300000}")
     @Transactional
     public void refreshAll() {
         Instant now = Instant.now();
 
-        // Compute topic stats
         try {
+            // 1. Collect topic stats
             var partitions = getPartitions(topicName);
             var earliest = listOffsets(partitions, OffsetSpec.earliest());
             var latest = listOffsets(partitions, OffsetSpec.latest());
@@ -71,44 +78,41 @@ public class KafkaMetricsService {
                 lastOffset = Math.max(lastOffset, hi);
             }
 
-            Instant lastPublished = null;
-
-            if(totalMsgs > 0) {
-                lastPublished = probeLastPublishedTimestamp(partitions, latest);
-            }
             TopicStats ts = new TopicStats();
             ts.setTopicName(topicName);
             ts.setMessageCount(totalMsgs);
             ts.setLastOffset(lastOffset);
-            ts.setLastPublishedAt(lastPublished);
+            ts.setLastPublishedAt(Instant.now()); // optional probe
             ts.setRefreshTime(now);
             topicRepo.save(ts);
 
-            // For each client group from DB
-            List<Client> all = clients.findAll();
-            for (Client c : all) {
-                String group = c.getConsumerGroupName();
-                ConsumerGroupStats row = buildGroupStats(group, partitions, latest, now);
-                cgRepo.save(row);
-            }
+            // 2. Build dictionary of latest commits from __consumer_offsets
+            Map<GroupTopicPartition, CommitInfo> latestCommits = readCommitLog();
 
-        }
-        catch (ExecutionException executionException) {
-            if(Objects.nonNull(executionException.getCause())){
-                var innerException = executionException.getCause();
-
-                if(innerException instanceof UnknownTopicOrPartitionException){
-                    logger.error("Topic '{}' not found in kafka.", topicName);
+            // 3. For each client → build ConsumerGroupStats
+            if(!latestCommits.isEmpty()){
+                for (Client c : clients.findAll()) {
+                    ConsumerGroupStats row = buildClientStats(c, partitions, latest, now, latestCommits);
+                    if(Objects.nonNull(row)) {
+                        cgRepo.save(row);
+                    }
                 }
             }
-            else {
+
+        } catch (ExecutionException executionException) {
+            if (Objects.nonNull(executionException.getCause())) {
+                if (executionException.getCause() instanceof UnknownTopicOrPartitionException) {
+                    logger.error("Topic '{}' not found in Kafka.", topicName);
+                }
+            } else {
                 logger.error(executionException.getMessage(), executionException);
             }
-        }
-        catch (Exception e) {
-            logger.error(e.getMessage(), e);
+        } catch (Exception e) {
+            logger.error("Kafka metrics refresh failed", e);
         }
     }
+
+    // --- Core Helpers ---
 
     private List<TopicPartition> getPartitions(String topic) throws ExecutionException, InterruptedException {
         Map<String, TopicDescription> desc = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get();
@@ -117,96 +121,118 @@ public class KafkaMetricsService {
                 .collect(Collectors.toList());
     }
 
-    private Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> listOffsets(List<TopicPartition> tps, OffsetSpec spec) throws ExecutionException, InterruptedException {
+    private Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> listOffsets(
+            List<TopicPartition> tps, OffsetSpec spec
+    ) throws ExecutionException, InterruptedException {
         Map<TopicPartition, OffsetSpec> req = new HashMap<>();
         for (TopicPartition tp : tps) req.put(tp, spec);
         return admin.listOffsets(req).all().get();
     }
 
-    private Instant probeLastPublishedTimestamp(List<TopicPartition> tps, Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latest) {
-        // Peek the last record timestamp per partition; return max across partitions
+    /**
+     * Consume __consumer_offsets and keep only latest record per (group, topic, partition).
+     */
+    private Map<GroupTopicPartition, CommitInfo> readCommitLog() {
         Properties props = new Properties();
-        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG, "metrics-probe");
-        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArrayDeserializer.class.getName());
-        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArrayDeserializer.class.getName());
-        props.put(org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1");
-        Instant maxTs = null;
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "metrics-commit-reader-" + UUID.randomUUID());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        Map<GroupTopicPartition, CommitInfo> latestCommits = new HashMap<>();
+
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props)) {
-            for (TopicPartition tp : tps) {
-                long hi = latest.get(tp).offset();
-                if (hi <= 0) continue;
-                consumer.assign(Collections.singleton(tp));
-                consumer.seek(tp, hi - 1);
-                var recs = consumer.poll(Duration.ofMillis(2000));
-                if (!recs.isEmpty()) {
-                    var ts = Instant.ofEpochMilli(recs.iterator().next().timestamp());
-                    if (maxTs == null || ts.isAfter(maxTs)) maxTs = ts;
+            // subscribe to ALL partitions of __consumer_offsets
+            List<PartitionInfo> partitions = consumer.partitionsFor("__consumer_offsets");
+            List<TopicPartition> topicPartitions = partitions.stream()
+                    .map(p -> new TopicPartition(p.topic(), p.partition()))
+                    .toList();
+            consumer.assign(topicPartitions);
+
+            boolean more = true;
+            while (more) {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofSeconds(10));
+                if (records.isEmpty()) {
+                    more = false; // stop when no more messages
                 }
+                for (ConsumerRecord<byte[], byte[]> rec : records) {
+                    OffsetKey key = OffsetKey.tryParse(rec.key());
+                    if (key == null || rec.value() == null) {
+                        continue; // skip non-offset messages
+                    }
+
+                    OffsetMessageParser.OffsetAndMetadata committed =
+                            OffsetMessageParser.parseOffsetMessageValue(rec.value());
+
+                    if (committed == null) continue;
+
+                    GroupTopicPartition gtp = new GroupTopicPartition(
+                            key.getSubscriberGroupName(),
+                            key.getTopicName(),
+                            key.getPartition()
+                    );
+
+                    CommitInfo info = new CommitInfo(
+                            committed.offset(),                               // ✅ actual committed offset
+                            Instant.ofEpochMilli(committed.commitTimestamp()) // ✅ actual commit timestamp
+                    );
+
+                    latestCommits.put(gtp, info);
+                }
+
             }
         } catch (Exception e) {
-            // ignore, return null
+            logger.error("Error consuming __consumer_offsets", e);
         }
-        return maxTs;
+
+        return latestCommits;
     }
 
-    private ConsumerGroupStats buildGroupStats(String group,
-                                               List<TopicPartition> topicPartitions,
-                                               Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latest,
-                                               Instant now) throws ExecutionException, InterruptedException {
-        // Try to fetch committed offsets for group
-        Map<TopicPartition, OffsetAndMetadata> committed = null;
-        try {
-            committed = admin.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
-        } catch (Exception e) {
-            committed = null;
-        }
+
+    private ConsumerGroupStats buildClientStats(
+            Client client,
+            List<TopicPartition> topicPartitions,
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latest,
+            Instant now,
+            Map<GroupTopicPartition, CommitInfo> commits
+    ) {
+        String group = client.getConsumerGroupName();
 
         ConsumerGroupStats row = new ConsumerGroupStats();
         row.setConsumerGroupName(group);
         row.setTopicName(topicName);
         row.setRefreshTime(now);
 
-        // Find previous snapshot
-        var prevOpt = cgRepo.findFirstByConsumerGroupNameAndTopicNameOrderByRefreshTimeDesc(group, topicName);
-        Long prevCommittedSum = prevOpt.map(ConsumerGroupStats::getLastCommittedOffset).orElse(null);
-        Instant prevCommitTime = prevOpt.map(ConsumerGroupStats::getLastCommitTime).orElse(null);
+        long totalLag = 0L;
+        Instant lastCommitTime = null;
+        long lastCommittedOffset = 0L;
 
-        if (committed == null || committed.isEmpty()) {
-            // INACTIVE: use previous lastCommitTime if exists else null
-            row.setStatus("INACTIVE");
-            row.setLag(null);
-            row.setLastCommittedOffset(prevCommittedSum);
-            row.setLastCommitTime(prevCommitTime);
-            return row;
-        }
-
-        // Filter to topic partitions only
-        Map<TopicPartition, OffsetAndMetadata> topicCommitted = committed.entrySet().stream()
-                .filter(e -> e.getKey().topic().equals(topicName))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        long lagSum = 0L;
-        long committedSum = 0L;
         for (TopicPartition tp : topicPartitions) {
             long hi = latest.get(tp).offset();
-            long comm = topicCommitted.getOrDefault(tp, new OffsetAndMetadata(0L)).offset();
-            committedSum += comm;
-            lagSum += Math.max(hi - comm, 0);
+            GroupTopicPartition gtp = new GroupTopicPartition(group, tp.topic(), tp.partition());
+            CommitInfo info = commits.get(gtp);
+
+            long committedOffset = (info != null) ? info.getOffset() : 0L;
+            lastCommittedOffset = Math.max(committedOffset, lastCommittedOffset);
+            long lag = Math.max(hi - committedOffset, 0);
+
+            totalLag += lag;
+
+            if (info != null && (lastCommitTime == null || info.getTimestamp().isAfter(lastCommitTime))) {
+                lastCommitTime = info.getTimestamp();
+            }
         }
 
-        row.setStatus("ACTIVE");
-        row.setLag(lagSum);
-        row.setLastCommittedOffset(committedSum);
+        if(lastCommitTime == null)
+            return null;
 
-        // Last commit time heuristic: if committedSum increased since last snapshot => update time to now
-        if (prevCommittedSum == null || committedSum > prevCommittedSum) {
-            row.setLastCommitTime(now);
-        } else {
-            // If no change, keep previous value (could be null)
-            row.setLastCommitTime(prevCommitTime);
-        }
+        row.setLag(totalLag);
+        row.setLastCommittedOffset(lastCommittedOffset);
+        row.setLastCommitTime(lastCommitTime);
+        row.setStatus(totalLag == 0 ? "ACTIVE" : "LAGGING");
+
 
         return row;
     }
