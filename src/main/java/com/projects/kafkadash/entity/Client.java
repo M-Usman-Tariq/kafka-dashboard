@@ -1,9 +1,12 @@
 package com.projects.kafkadash.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.CurrentTimestamp;
+
+import java.time.Instant;
 
 @Entity
 @Table(name = "client")
@@ -19,13 +22,25 @@ public class Client {
 
     @NotBlank
     @Column(nullable = false)
-    private String name;
+    private String clientName;
 
     @NotBlank
     @Column(nullable = false)
-    private String displayName;
+    @Pattern(regexp = "^[^\\s]+$", message = "Subscription Name cannot contain spaces")
+    private String subscriptionName;
 
     @NotBlank
     @Column(nullable = false)
-    private String consumerGroupName;
+    private String contactName;
+
+    @NotBlank
+    @Column(nullable = false)
+    @Email(message = "Invalid email format")
+    private String contactEmail;
+
+    @Column(nullable = false)
+    @CurrentTimestamp
+    private Instant insertionTimestamp;
+
+
 }

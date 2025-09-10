@@ -31,9 +31,10 @@ public class SeedData {
             if (clients.count() == 0) {
                 Client c1 = new Client();
                 c1.setClientId("client-1");
-                c1.setName("Client One");
-                c1.setDisplayName("Client One");
-                c1.setConsumerGroupName("connect-sink-1");
+                c1.setClientName("Client One");
+                c1.setSubscriptionName("connect-sink-1");
+                c1.setContactName("contact-Name-1");
+                c1.setContactEmail("contact.email@gmail.com");
                 clients.save(c1);
             }
         };

@@ -23,7 +23,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -198,7 +197,7 @@ public class KafkaMetricsService {
             Instant now,
             Map<GroupTopicPartition, CommitInfo> commits
     ) {
-        String group = client.getConsumerGroupName();
+        String group = client.getSubscriptionName();
 
         ConsumerGroupStats row = new ConsumerGroupStats();
         row.setConsumerGroupName(group);

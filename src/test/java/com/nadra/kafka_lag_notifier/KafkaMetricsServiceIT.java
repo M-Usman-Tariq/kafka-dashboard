@@ -1,7 +1,6 @@
 package com.nadra.kafka_lag_notifier;
 
 import com.projects.kafkadash.KafkaDashboardApplication;
-import com.projects.kafkadash.dto.ConsumerGroupView;
 import com.projects.kafkadash.dto.TopicView;
 import com.projects.kafkadash.entity.Client;
 import com.projects.kafkadash.repository.ClientRepository;
@@ -18,8 +17,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -108,9 +105,10 @@ class KafkaMetricsServiceIT {
     private void createClient(String id, String group, String topic) {
         Client c = new Client();
         c.setClientId(id);
-        c.setName(id);
-        c.setDisplayName(id);
-        c.setConsumerGroupName(group);
+        c.setClientName(id);
+        c.setContactName("contacName");
+        c.setContactEmail("contact@gmail.com");
+        c.setSubscriptionName(group);
         clientRepo.save(c);
     }
 

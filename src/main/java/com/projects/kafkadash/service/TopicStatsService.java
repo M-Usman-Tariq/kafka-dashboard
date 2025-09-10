@@ -36,9 +36,9 @@ public class TopicStatsService {
                 });
 
         var consumers = clientRepo.findAll().stream().map(c -> {
-                    var latest = cgRepo.findFirstByConsumerGroupNameAndTopicNameOrderByRefreshTimeDesc(c.getConsumerGroupName(), topic).orElse(null);
+                    var latest = cgRepo.findFirstByConsumerGroupNameAndTopicNameOrderByRefreshTimeDesc(c.getSubscriptionName(), topic).orElse(null);
                     if (latest == null) {
-                        return new ConsumerGroupView(c.getConsumerGroupName(), "INACTIVE", null, null, null);
+                        return new ConsumerGroupView(c.getSubscriptionName(), "INACTIVE", null, null, null);
                     }
                     return new ConsumerGroupView(latest.getConsumerGroupName(),
                             latest.getStatus(),

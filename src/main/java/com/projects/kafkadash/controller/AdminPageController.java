@@ -162,7 +162,8 @@ public class AdminPageController {
             ra.addFlashAttribute("success", "Client created.");
             return "redirect:/admin";
         } catch (IllegalArgumentException e) {
-            result.rejectValue("clientId", "duplicate", e.getMessage());
+
+            result.rejectValue("clientId", "error.client", e.getMessage());
             ra.addFlashAttribute("org.springframework.validation.BindingResult.client", result);
             ra.addFlashAttribute("client", client);
             return "redirect:/admin/clients/new";

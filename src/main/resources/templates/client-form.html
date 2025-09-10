@@ -21,25 +21,32 @@
       <label class="form-label">Client ID</label>
       <input id="clientId" class="form-control" th:field="*{clientId}"
              th:readonly="${isEdit}" th:attr="aria-readonly=${isEdit}" required autocomplete="off"/>
+      <div class="text-danger" th:if="${#fields.hasErrors('clientId')}" th:errors="*{clientId}"></div>
       <div id="clientIdError" class="text-danger"></div>
     </div>
 
     <div class="mb-3">
-      <label class="form-label">Name</label>
-      <input id="name" class="form-control" th:field="*{name}" required autocomplete="off">
-      <div id="nameError" class="text-danger"></div>
+      <label class="form-label">Client Name</label>
+      <input id="clientName" class="form-control" th:field="*{clientName}" required autocomplete="off">
+      <div id="clientNameError" class="text-danger"></div>
     </div>
 
     <div class="mb-3">
-      <label class="form-label">Display Name</label>
-      <input id="displayName" class="form-control" th:field="*{displayName}" required autocomplete="off">
-      <div id="displayNameError" class="text-danger"></div>
+      <label class="form-label">Subscription Name</label>
+      <input id="subscriptionName" class="form-control" th:field="*{subscriptionName}" required autocomplete="off">
+      <div id="subscriptionNameError" class="text-danger"></div>
     </div>
 
     <div class="mb-3">
-      <label class="form-label">Consumer Group Name</label>
-      <input id="consumerGroupName" class="form-control" th:field="*{consumerGroupName}" required autocomplete="off">
-      <div id="consumerGroupNameError" class="text-danger"></div>
+      <label class="form-label">Contact Name</label>
+      <input id="contactName" class="form-control" th:field="*{contactName}" required autocomplete="off">
+      <div id="contactNameError" class="text-danger"></div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Contact Email</label>
+      <input id="contactEmail" class="form-control" th:field="*{contactEmail}" required autocomplete="off">
+      <div id="contactEmailError" class="text-danger"></div>
     </div>
 
     <div class="d-flex gap-2">
@@ -73,34 +80,47 @@
     let valid = true;
 
     const clientId = document.getElementById('clientId');
-    const name = document.getElementById('name');
-    const displayName = document.getElementById('displayName');
-    const consumerGroupName = document.getElementById('consumerGroupName');
+    const clientName = document.getElementById('clientName');
+    const subscriptionName = document.getElementById('subscriptionName');
+    const contactName = document.getElementById('contactName');
+    const contactEmail = document.getElementById('contactEmail');
 
     // Clear errors
     document.getElementById('clientIdError').innerText = '';
-    document.getElementById('nameError').innerText = '';
-    document.getElementById('displayNameError').innerText = '';
-    document.getElementById('consumerGroupNameError').innerText = '';
+    document.getElementById('clientNameError').innerText = '';
+    document.getElementById('subscriptionNameError').innerText = '';
+    document.getElementById('contactNameError').innerText = '';
+    document.getElementById('contactEmailError').innerText = '';
 
+    // Required checks
     if (!clientId.value.trim()) {
       document.getElementById('clientIdError').innerText = 'Client ID is required';
       valid = false;
     }
-
-    if (!name.value.trim()) {
-      document.getElementById('nameError').innerText = 'Name is required';
+    if (!clientName.value.trim()) {
+      document.getElementById('clientNameError').innerText = 'Client Name is required';
       valid = false;
     }
-
-    if (!displayName.value.trim()) {
-      document.getElementById('displayNameError').innerText = 'Display Name is required';
+    if (!subscriptionName.value.trim()) {
+      document.getElementById('subscriptionNameError').innerText = 'Subscription Name is required';
+      valid = false;
+    } else if (/\s/.test(subscriptionName.value)) {
+      document.getElementById('subscriptionNameError').innerText = 'Subscription Name cannot contain spaces';
       valid = false;
     }
-
-    if (!consumerGroupName.value.trim()) {
-      document.getElementById('consumerGroupNameError').innerText = 'Consumer Group Name is required';
+    if (!contactName.value.trim()) {
+      document.getElementById('contactNameError').innerText = 'Contact Name is required';
       valid = false;
+    }
+    if (!contactEmail.value.trim()) {
+      document.getElementById('contactEmailError').innerText = 'Contact Email is required';
+      valid = false;
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(contactEmail.value)) {
+        document.getElementById('contactEmailError').innerText = 'Invalid email format';
+        valid = false;
+      }
     }
 
     // Enable/disable save button
@@ -114,7 +134,7 @@
     const saveBtn = document.getElementById('saveBtn');
     const confirmSaveBtn = document.getElementById('confirmSaveBtn');
 
-    const inputs = ['clientId', 'name', 'displayName', 'consumerGroupName'];
+    const inputs = ['clientId', 'clientName', 'subscriptionName', 'contactName', 'contactEmail'];
     inputs.forEach(id => {
       document.getElementById(id).addEventListener('input', validateClient);
     });
