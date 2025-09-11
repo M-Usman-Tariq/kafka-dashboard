@@ -163,9 +163,9 @@ class KafkaMetricsServiceIT {
         kafkaMetricsService.refreshAll();
         TopicView view = topicStatsService.stats(TOPIC1);
 
-        var cgView = view.consumers().stream().filter(c -> GROUP1.equals(c.groupId())).findFirst().orElseThrow();
+        var cgView = view.consumers().stream().filter(c -> GROUP1.equals(c.subscriptionName())).findFirst().orElseThrow();
         assertThat(cgView.lag()).isEqualTo(0);
-        assertThat(cgView.status()).isEqualTo("ACTIVE");
+        assertThat(cgView.syncState()).isEqualTo("SYNCED");
     }
 
     @Test
@@ -182,7 +182,7 @@ class KafkaMetricsServiceIT {
         kafkaMetricsService.refreshAll();
         TopicView view = topicStatsService.stats(TOPIC1);
 
-        var cgView = view.consumers().stream().filter(c -> GROUP2.equals(c.groupId())).findFirst().orElseThrow();
+        var cgView = view.consumers().stream().filter(c -> GROUP2.equals(c.subscriptionName())).findFirst().orElseThrow();
         assertThat(cgView.lag()).isGreaterThan(0);
     }
 
@@ -202,8 +202,8 @@ class KafkaMetricsServiceIT {
         kafkaMetricsService.refreshAll();
         TopicView view = topicStatsService.stats(TOPIC1);
 
-        var cg1 = view.consumers().stream().filter(c -> GROUP1.equals(c.groupId())).findFirst().orElseThrow();
-        var cg2 = view.consumers().stream().filter(c -> GROUP2.equals(c.groupId())).findFirst().orElseThrow();
+        var cg1 = view.consumers().stream().filter(c -> GROUP1.equals(c.subscriptionName())).findFirst().orElseThrow();
+        var cg2 = view.consumers().stream().filter(c -> GROUP2.equals(c.subscriptionName())).findFirst().orElseThrow();
 
         assertThat(cg1.lag()).isEqualTo(0);
         assertThat(cg2.lag()).isGreaterThan(0);
@@ -222,8 +222,8 @@ class KafkaMetricsServiceIT {
         kafkaMetricsService.refreshAll();
         TopicView view = topicStatsService.stats(TOPIC1);
 
-        var cgView = view.consumers().stream().filter(c -> GROUP3.equals(c.groupId())).findFirst().orElseThrow();
-        assertThat(cgView.status()).isEqualTo("INACTIVE");
+        var cgView = view.consumers().stream().filter(c -> GROUP3.equals(c.subscriptionName())).findFirst().orElseThrow();
+        assertThat(cgView.syncState()).isEqualTo("INACTIVE");
     }
 
     @AfterAll

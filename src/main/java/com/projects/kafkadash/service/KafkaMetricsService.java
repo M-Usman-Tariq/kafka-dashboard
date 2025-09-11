@@ -88,13 +88,18 @@ public class KafkaMetricsService {
             // 2. Build dictionary of latest commits from __consumer_offsets
             Map<GroupTopicPartition, CommitInfo> latestCommits = readCommitLog();
 
-            // 3. For each client → build ConsumerGroupStats
-            if(!latestCommits.isEmpty()){
-                for (Client c : clients.findAll()) {
-                    ConsumerGroupStats row = buildClientStats(c, partitions, latest, now, latestCommits);
-                    if(Objects.nonNull(row)) {
-                        cgRepo.save(row);
-                    }
+            Set<String> runningGroups = admin.listConsumerGroups().all().get()
+                    .stream()
+                    .map(ConsumerGroupListing::groupId)
+                    .collect(Collectors.toSet());
+
+            if(latestCommits.isEmpty() && runningGroups.isEmpty())
+                return;
+
+            for (Client c : clients.findAll()) {
+                ConsumerGroupStats row = buildClientStats(c, partitions, latest, now, latestCommits, runningGroups);
+                if(Objects.nonNull(row)) {
+                    cgRepo.save(row);
                 }
             }
 
@@ -195,14 +200,19 @@ public class KafkaMetricsService {
             List<TopicPartition> topicPartitions,
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latest,
             Instant now,
-            Map<GroupTopicPartition, CommitInfo> commits
+            Map<GroupTopicPartition, CommitInfo> commits,
+            Set<String> runningGroups
     ) {
         String group = client.getSubscriptionName();
 
         ConsumerGroupStats row = new ConsumerGroupStats();
         row.setConsumerGroupName(group);
+        row.setClientName(client.getClientName());
         row.setTopicName(topicName);
         row.setRefreshTime(now);
+
+        // --- Running State ---
+        row.setRunningState(runningGroups.contains(group) ? "RUNNING" : "IDLE");
 
         long totalLag = 0L;
         Instant lastCommitTime = null;
@@ -224,15 +234,36 @@ public class KafkaMetricsService {
             }
         }
 
-        if(lastCommitTime == null)
+        // --- Handle missing commit info ---
+        if (lastCommitTime == null) {
+            // fallback to last stored DB record
+            var prevInfo = cgRepo.findFirstByConsumerGroupNameAndTopicNameOrderByRefreshTimeDesc(group, topicName);
+            if (prevInfo.stream().isParallel()) {
+                var prev = prevInfo.get();
+                lastCommitTime = prev.getLastCommitTime();
+                lastCommittedOffset = prev.getLastCommittedOffset();
+            }
+        }
+
+        if (lastCommitTime == null) {
+            // nothing known → skip
             return null;
+        }
 
         row.setLag(totalLag);
         row.setLastCommittedOffset(lastCommittedOffset);
         row.setLastCommitTime(lastCommitTime);
-        row.setStatus(totalLag == 0 ? "ACTIVE" : "LAGGING");
 
+        // --- Sync Status ---
+        if (Duration.between(lastCommitTime, now).toHours() > 24) {
+            row.setSyncStatus("INACTIVE");
+        } else if (totalLag > 0) {
+            row.setSyncStatus("LAGGING");
+        } else {
+            row.setSyncStatus("SYNCED");
+        }
 
         return row;
     }
+
 }

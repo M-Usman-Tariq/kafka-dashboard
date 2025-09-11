@@ -71,14 +71,16 @@
   <!-- Consumer Groups Table -->
   <div class="card shadow-sm mt-4">
     <div class="card-header">
-      <h5 class="mb-0">Consumer Groups</h5>
+      <h5 class="mb-0">Client Stats</h5>
     </div>
     <div class="card-body p-0">
       <table class="table table-hover table-striped mb-0">
         <thead class="table-primary">
         <tr>
-          <th>Group</th>
-          <th>Status</th>
+          <th>Client</th>
+          <th>Subscription</th>
+          <th>Running State</th>
+          <th>Sync State</th>
           <th>Total Lag</th>
           <th>Last Committed Offset</th>
           <th>Last Commit Time</th>
@@ -112,12 +114,19 @@
     (data.consumers || []).forEach(c => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-          <td>${c.groupId}</td>
+          <td>${c.clientName}</td>
+          <td>${c.subscriptionName}</td>
           <td>
             <span class="badge
-              ${c.status === 'ACTIVE' ? 'bg-success' :
-                        (c.status === 'INACTIVE' ? 'bg-danger' : 'bg-warning')}">
-              ${c.status}
+              ${c.runningState === 'RUNNING' ? 'bg-success' :'bg-danger'}">
+              ${c.runningState}
+            </span>
+        </td>
+          <td>
+            <span class="badge
+              ${c.syncState === 'SYNCED' ? 'bg-success' :
+                        (c.syncState === 'INACTIVE' ? 'bg-danger' : 'bg-warning')}">
+              ${c.syncState}
             </span>
         </td>
           <td>${c.lag ?? '-'}</td>

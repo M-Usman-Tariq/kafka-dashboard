@@ -127,14 +127,16 @@ class KafkaRealClusterIntegrationTests {
         TopicView view = topicStatsService.stats(TOPIC1);
 
         var cgView = view.consumers().stream()
-                .filter(c -> GROUP1.equals(c.groupId()))
+                .filter(c -> GROUP1.equals(c.subscriptionName()))
                 .findFirst().orElseThrow();
 
         System.out.printf("==> Caught up check: group=%s lag=%d status=%s%n",
-                cgView.groupId(), cgView.lag(), cgView.status());
+                cgView.subscriptionName(), cgView.lag(), cgView.syncState());
 
         assertThat(cgView.lag()).isEqualTo(0);
-        assertThat(cgView.status()).isEqualTo("ACTIVE");
+        assertThat(cgView.runningState()).isEqualTo("RUNNING");   // no active members
+        assertThat(cgView.syncState()).isEqualTo("SYNCED");
+
     }
 
     @Test
@@ -153,13 +155,15 @@ class KafkaRealClusterIntegrationTests {
         TopicView view = topicStatsService.stats(TOPIC1);
 
         var cgView = view.consumers().stream()
-                .filter(c -> GROUP2.equals(c.groupId()))
+                .filter(c -> GROUP2.equals(c.subscriptionName()))
                 .findFirst().orElseThrow();
 
         System.out.printf("==> Lagging check: group=%s lag=%d%n",
-                cgView.groupId(), cgView.lag());
+                cgView.subscriptionName(), cgView.lag());
 
         assertThat(cgView.lag()).isGreaterThan(0);
+        assertThat(cgView.runningState()).isEqualTo("RUNNING");
+        assertThat(cgView.syncState()).isEqualTo("LAGGING");
     }
 
     @Test
@@ -179,14 +183,20 @@ class KafkaRealClusterIntegrationTests {
         kafkaMetricsService.refreshAll();
         TopicView view = topicStatsService.stats(TOPIC1);
 
-        var cg1 = view.consumers().stream().filter(c -> GROUP1.equals(c.groupId())).findFirst().orElseThrow();
-        var cg2 = view.consumers().stream().filter(c -> GROUP2.equals(c.groupId())).findFirst().orElseThrow();
+        var cg1 = view.consumers().stream().filter(c -> GROUP1.equals(c.subscriptionName())).findFirst().orElseThrow();
+        var cg2 = view.consumers().stream().filter(c -> GROUP2.equals(c.subscriptionName())).findFirst().orElseThrow();
 
         System.out.printf("==> Mixed check: group1 lag=%d, group2 lag=%d%n",
                 cg1.lag(), cg2.lag());
 
         assertThat(cg1.lag()).isEqualTo(0);
         assertThat(cg2.lag()).isGreaterThan(0);
+
+        assertThat(cg1.runningState()).isEqualTo("RUNNING");
+        assertThat(cg1.syncState()).isEqualTo("SYNCED");
+
+        assertThat(cg2.runningState()).isEqualTo("RUNNING");
+        assertThat(cg2.syncState()).isEqualTo("LAGGING");
     }
 
     @Test
@@ -203,12 +213,13 @@ class KafkaRealClusterIntegrationTests {
         kafkaMetricsService.refreshAll();
         TopicView view = topicStatsService.stats(TOPIC1);
 
-        var cgView = view.consumers().stream().filter(c -> GROUP3.equals(c.groupId())).findFirst().orElseThrow();
+        var cgView = view.consumers().stream().filter(c -> GROUP3.equals(c.subscriptionName())).findFirst().orElseThrow();
 
         System.out.printf("==> Inactive check: group=%s status=%s%n",
-                cgView.groupId(), cgView.status());
+                cgView.subscriptionName(), cgView.syncState());
 
-        assertThat(cgView.status()).isEqualTo("INACTIVE");
+        assertThat(cgView.runningState()).isEqualTo("IDLE");
+        assertThat(cgView.syncState()).isEqualTo("INACTIVE");
     }
 
     // --------------------

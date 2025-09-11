@@ -13,21 +13,23 @@ import java.time.Instant;
 public class ConsumerGroupStats {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
     @Column(nullable = false)
     private String consumerGroupName;
-
     @Column(nullable = false)
     private String topicName;
-
-    @Column(name = "total_lag")
+    @Column(nullable = false)
+    private String clientName;
+    @Column(nullable = false)
     private Long lag;
-    @Column(name = "lastCommittedOffset")
+    @Column(nullable = false)
     private Long lastCommittedOffset;
-    @Column(name = "lastCommitTime")
+    @Column(nullable = false)
     private Instant lastCommitTime;
     @Column(nullable = false)
-    private String status; // ACTIVE or INACTIVE
+    private String runningState; // RUNNING / IDLE
+    @Column(nullable = false)
+    private String syncStatus;   // ACTIVE / LAGGING / INACTIVE
+
     @Column(nullable = false)
     private Instant refreshTime;
 }

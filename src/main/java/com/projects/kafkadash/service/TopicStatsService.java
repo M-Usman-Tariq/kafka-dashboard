@@ -38,14 +38,16 @@ public class TopicStatsService {
         var consumers = clientRepo.findAll().stream().map(c -> {
                     var latest = cgRepo.findFirstByConsumerGroupNameAndTopicNameOrderByRefreshTimeDesc(c.getSubscriptionName(), topic).orElse(null);
                     if (latest == null) {
-                        return new ConsumerGroupView(c.getSubscriptionName(), "INACTIVE", null, null, null);
+                        return new ConsumerGroupView(c.getClientName(), c.getSubscriptionName(), "IDLE","INACTIVE", null, null, null);
                     }
-                    return new ConsumerGroupView(latest.getConsumerGroupName(),
-                            latest.getStatus(),
+                    return new ConsumerGroupView(latest.getClientName(),
+                            latest.getConsumerGroupName(),
+                            latest.getRunningState(),
+                            latest.getSyncStatus(),
                             latest.getLag(),
                             latest.getLastCommittedOffset(),
                             latest.getLastCommitTime());
-                }).sorted(Comparator.comparing(ConsumerGroupView::groupId))
+                }).sorted(Comparator.comparing(ConsumerGroupView::subscriptionName))
                 .toList();
 
         return new TopicView(topic, t.getMessageCount(), t.getLastOffset(), t.getLastPublishedAt(), t.getRefreshTime(), consumers);
