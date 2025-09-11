@@ -3,6 +3,7 @@ package com.nadra.kafka_lag_notifier;
 import com.projects.kafkadash.KafkaDashboardApplication;
 import com.projects.kafkadash.dto.TopicView;
 import com.projects.kafkadash.entity.Client;
+import com.projects.kafkadash.entity.ConsumerGroupStats;
 import com.projects.kafkadash.repository.ClientRepository;
 import com.projects.kafkadash.repository.ConsumerGroupStatsRepository;
 import com.projects.kafkadash.repository.TopicStatsRepository;
@@ -26,6 +27,7 @@ import org.springframework.kafka.core.*;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
@@ -222,6 +224,119 @@ class KafkaRealClusterIntegrationTests {
         assertThat(cgView.syncState()).isEqualTo("INACTIVE");
     }
 
+    @Test
+    @Order(5)
+    void testClientIdleButSynced() throws Exception {
+        createClient("bisp", GROUP1, TOPIC1);
+
+        // Produce messages
+        kafkaTemplate.send(TOPIC1, "m1");
+        kafkaTemplate.send(TOPIC1, "m2");
+        kafkaTemplate.flush();
+
+        // Consume all → group is caught up
+        consumeMessages(GROUP1, TOPIC1, 2);
+
+        // Close consumer → group has no active members
+        kafkaMetricsService.refreshAll();
+        TopicView view = topicStatsService.stats(TOPIC1);
+
+        var cgView = view.consumers().stream().filter(c -> GROUP1.equals(c.subscriptionName())).findFirst().orElseThrow();
+
+        System.out.printf("==> Idle but synced check: group=%s running=%s sync=%s%n",
+                cgView.subscriptionName(), cgView.runningState(), cgView.syncState());
+
+        assertThat(cgView.runningState()).isEqualTo("IDLE");
+        assertThat(cgView.syncState()).isEqualTo("SYNCED");
+    }
+
+    @Test
+    @Order(6)
+    void testClientRunningLagging() throws Exception {
+        createClient("askari", GROUP2, TOPIC1);
+
+        // Produce 3 messages
+        for (int i = 0; i < 3; i++) {
+            kafkaTemplate.send(TOPIC1, "msg-" + i);
+        }
+        kafkaTemplate.flush();
+
+        // Start consumer but only process 1
+        consumeMessages(GROUP2, TOPIC1, 1);
+
+        kafkaMetricsService.refreshAll();
+        TopicView view = topicStatsService.stats(TOPIC1);
+
+        var cgView = view.consumers().stream().filter(c -> GROUP2.equals(c.subscriptionName())).findFirst().orElseThrow();
+
+        System.out.printf("==> Running lagging check: group=%s running=%s lag=%d sync=%s%n",
+                cgView.subscriptionName(), cgView.runningState(), cgView.lag(), cgView.syncState());
+
+        assertThat(cgView.runningState()).isEqualTo("RUNNING");
+        assertThat(cgView.syncState()).isEqualTo("LAGGING");
+    }
+
+    @Test
+    @Order(7)
+    void testClientInactiveDueToOldCommit() throws Exception {
+        createClient("fia", GROUP3, TOPIC1);
+
+        // Produce & consume once
+        kafkaTemplate.send(TOPIC1, "old1");
+        kafkaTemplate.flush();
+        consumeMessages(GROUP3, TOPIC1, 1);
+
+        // Manually backdate last commit time in DB (simulate >24h old)
+        var cgStats = cgRepo.findAll().get(0);
+        cgStats.setLastCommitTime(cgStats.getLastCommitTime().minus(Duration.ofHours(25)));
+        cgRepo.save(cgStats);
+
+        kafkaMetricsService.refreshAll();
+        TopicView view = topicStatsService.stats(TOPIC1);
+
+        var cgView = view.consumers().stream().filter(c -> GROUP3.equals(c.subscriptionName())).findFirst().orElseThrow();
+
+        System.out.printf("==> Inactive due to old commit: group=%s sync=%s%n",
+                cgView.subscriptionName(), cgView.syncState());
+
+        assertThat(cgView.syncState()).isEqualTo("INACTIVE");
+    }
+
+    @Test
+    @Order(8)
+    void testMultipleGroupsDifferentStates() throws Exception {
+        createClient("bisp", GROUP1, TOPIC1);
+        createClient("askari", GROUP2, TOPIC1);
+        createClient("fia", GROUP3, TOPIC1);
+
+        // Produce 5 messages
+        for (int i = 0; i < 5; i++) {
+            kafkaTemplate.send(TOPIC1, "k" + i, "msg-" + i);
+        }
+        kafkaTemplate.flush();
+
+        consumeMessages(GROUP1, TOPIC1, 5); // fully caught up
+        consumeMessages(GROUP2, TOPIC1, 2); // lagging
+        // GROUP3 does nothing → inactive
+
+        kafkaMetricsService.refreshAll();
+        TopicView view = topicStatsService.stats(TOPIC1);
+
+        var cg1 = view.consumers().stream().filter(c -> GROUP1.equals(c.subscriptionName())).findFirst().orElseThrow();
+        var cg2 = view.consumers().stream().filter(c -> GROUP2.equals(c.subscriptionName())).findFirst().orElseThrow();
+        var cg3 = view.consumers().stream().filter(c -> GROUP3.equals(c.subscriptionName())).findFirst().orElseThrow();
+
+        System.out.printf("==> Mixed states: group1=%s/%s, group2=%s/%s, group3=%s/%s%n",
+                cg1.runningState(), cg1.syncState(),
+                cg2.runningState(), cg2.syncState(),
+                cg3.runningState(), cg3.syncState());
+
+        assertThat(cg1.syncState()).isEqualTo("SYNCED");
+        assertThat(cg2.syncState()).isEqualTo("LAGGING");
+        assertThat(cg3.syncState()).isEqualTo("INACTIVE");
+    }
+
+
     // --------------------
     // Helpers (replace with your impls)
     // --------------------
@@ -284,6 +399,73 @@ class KafkaRealClusterIntegrationTests {
                     consumed, groupId, topic);
         }
     }
+
+    @Test
+    @Order(9)
+    void testNoCommitsYetSkipped() {
+        // Client registered but never consumed
+        createClient("ghost", "ghost-group", TOPIC1);
+
+        kafkaMetricsService.refreshAll();
+        TopicView view = topicStatsService.stats(TOPIC1);
+
+        // No stats should exist for ghost-group
+        boolean exists = view.consumers().stream()
+                .anyMatch(c -> "ghost-group".equals(c.subscriptionName()));
+        assertThat(exists).isFalse();
+    }
+
+    @Test
+    @Order(10)
+    void testFallbackFromDb() {
+        String group = "fallback-group";
+        createClient("fb", group, TOPIC1);
+
+        // Insert old record manually
+        ConsumerGroupStats stats = new ConsumerGroupStats();
+        stats.setConsumerGroupName(group);
+        stats.setTopicName(TOPIC1);
+        stats.setClientName("FB");
+        stats.setLag(0L);
+        stats.setLastCommittedOffset(42L);
+        stats.setLastCommitTime(Instant.now().minus(Duration.ofHours(1)));
+        stats.setRefreshTime(Instant.now().minus(Duration.ofHours(1)));
+        stats.setRunningState("IDLE");
+        stats.setSyncStatus("SYNCED");
+        cgRepo.save(stats);
+
+        // Now refresh (with no new commits in offsets log)
+        kafkaMetricsService.refreshAll();
+
+        TopicView view = topicStatsService.stats(TOPIC1);
+        var cgView = view.consumers().stream()
+                .filter(c -> group.equals(c.subscriptionName()))
+                .findFirst().orElseThrow();
+
+        assertThat(cgView.lastCommittedOffset()).isEqualTo(42L);
+        assertThat(cgView.syncState()).isEqualTo("SYNCED");
+    }
+
+    @Test
+    @Order(11)
+    void testUnknownTopicHandledGracefully() throws Exception {
+        // Temporarily delete topic to trigger error path
+        try (AdminClient admin = AdminClient.create(Map.of(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BOOSTRAP_SERVERS
+        ))) {
+            admin.deleteTopics(List.of(TOPIC1)).all().get();
+        }
+
+        kafkaMetricsService.refreshAll(); // should not throw
+
+        // Recreate topic for later tests
+        try (AdminClient admin = AdminClient.create(Map.of(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BOOSTRAP_SERVERS
+        ))) {
+            admin.createTopics(List.of(new NewTopic(TOPIC1, 1, (short) 1))).all().get();
+        }
+    }
+
 
 
     // --------------------

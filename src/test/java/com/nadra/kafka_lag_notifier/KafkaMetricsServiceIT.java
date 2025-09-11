@@ -165,6 +165,7 @@ class KafkaMetricsServiceIT {
 
         var cgView = view.consumers().stream().filter(c -> GROUP1.equals(c.subscriptionName())).findFirst().orElseThrow();
         assertThat(cgView.lag()).isEqualTo(0);
+        assertThat(cgView.runningState()).isEqualTo("RUNNING");   // no active members
         assertThat(cgView.syncState()).isEqualTo("SYNCED");
     }
 
@@ -184,6 +185,8 @@ class KafkaMetricsServiceIT {
 
         var cgView = view.consumers().stream().filter(c -> GROUP2.equals(c.subscriptionName())).findFirst().orElseThrow();
         assertThat(cgView.lag()).isGreaterThan(0);
+        assertThat(cgView.runningState()).isEqualTo("RUNNING");
+        assertThat(cgView.syncState()).isEqualTo("LAGGING");
     }
 
     @Test
@@ -207,6 +210,12 @@ class KafkaMetricsServiceIT {
 
         assertThat(cg1.lag()).isEqualTo(0);
         assertThat(cg2.lag()).isGreaterThan(0);
+
+        assertThat(cg1.runningState()).isEqualTo("RUNNING");
+        assertThat(cg1.syncState()).isEqualTo("SYNCED");
+
+        assertThat(cg2.runningState()).isEqualTo("RUNNING");
+        assertThat(cg2.syncState()).isEqualTo("LAGGING");
     }
 
     @Test
@@ -223,6 +232,7 @@ class KafkaMetricsServiceIT {
         TopicView view = topicStatsService.stats(TOPIC1);
 
         var cgView = view.consumers().stream().filter(c -> GROUP3.equals(c.subscriptionName())).findFirst().orElseThrow();
+        assertThat(cgView.runningState()).isEqualTo("IDLE");
         assertThat(cgView.syncState()).isEqualTo("INACTIVE");
     }
 
