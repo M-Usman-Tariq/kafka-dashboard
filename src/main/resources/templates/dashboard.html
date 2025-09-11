@@ -113,7 +113,13 @@
       const tr = document.createElement('tr');
       tr.innerHTML = `
           <td>${c.groupId}</td>
-          <td><span class="badge ${c.status === 'ACTIVE' ? 'bg-success' : 'bg-warning'}">${c.status}</span></td>
+          <td>
+            <span class="badge
+              ${c.status === 'ACTIVE' ? 'bg-success' :
+                        (c.status === 'INACTIVE' ? 'bg-danger' : 'bg-warning')}">
+              ${c.status}
+            </span>
+        </td>
           <td>${c.lag ?? '-'}</td>
           <td>${c.lastCommittedOffset ?? '-'}</td>
           <td>${c.lastCommitTime ? new Date(c.lastCommitTime).toLocaleString() : 'N/A'}</td>
